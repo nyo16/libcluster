@@ -79,7 +79,11 @@ defmodule Cluster.Strategy.Rancher do
            list_nodes: list_nodes
          } = state
        ) do
-    new_nodelist = MapSet.new(get_nodes(state))
+    new_nodelist =
+      topology
+      |> Cluster.Strategy.poll_span(__MODULE__, fn -> get_nodes(state) end)
+      |> MapSet.new()
+
     removed = MapSet.difference(state.meta, new_nodelist)
 
     new_nodelist =
@@ -132,7 +136,8 @@ defmodule Cluster.Strategy.Rancher do
         endpoints_path = "latest/self/service"
         headers = [{~c"accept", ~c"application/json"}]
 
-        case :httpc.request(
+        case Cluster.Strategy.http_request(
+               topology,
                :get,
                {~c"#{@rancher_metadata_base_url}/#{endpoints_path}", headers},
                [],
@@ -142,7 +147,7 @@ defmodule Cluster.Strategy.Rancher do
             parse_response(app_name, Jason.decode!(body))
 
           {:ok, {{_version, code, status}, _headers, body}} ->
-            warn(
+            warning(
               topology,
               "cannot query Rancher Metadata API (#{code} #{status}): #{inspect(body)}"
             )
@@ -155,7 +160,7 @@ defmodule Cluster.Strategy.Rancher do
         end
 
       app_name ->
-        warn(
+        warning(
           topology,
           "rancher strategy is selected, but :node_basename is invalid, got: #{inspect(app_name)}"
         )

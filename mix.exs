@@ -8,7 +8,7 @@ defmodule Cluster.Mixfile do
     [
       app: :libcluster,
       version: @version,
-      elixir: "~> 1.13",
+      elixir: "~> 1.15",
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,
       description: """
@@ -21,8 +21,13 @@ defmodule Cluster.Mixfile do
       elixirc_paths: elixirc_paths(Mix.env()),
       dialyzer: [
         flags: ~w(-Wunmatched_returns -Werror_handling -Wrace_conditions -Wno_opaque -Wunderspecs)
-      ],
-      preferred_cli_env: [
+      ]
+    ]
+  end
+
+  def cli do
+    [
+      preferred_envs: [
         vcr: :test,
         "vcr.delete": :test,
         "vcr.check": :test,

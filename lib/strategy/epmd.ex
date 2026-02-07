@@ -57,9 +57,13 @@ defmodule Cluster.Strategy.Epmd do
   end
 
   @spec connect_hosts(State.t()) :: State.t()
-  defp connect_hosts(%State{config: config} = state) do
-    nodes = Keyword.get(config, :hosts, [])
-    Cluster.Strategy.connect_nodes(state.topology, state.connect, state.list_nodes, nodes)
+  defp connect_hosts(%State{topology: topology, config: config} = state) do
+    nodes =
+      Cluster.Strategy.poll_span(topology, __MODULE__, fn ->
+        Keyword.get(config, :hosts, [])
+      end)
+
+    Cluster.Strategy.connect_nodes(topology, state.connect, state.list_nodes, nodes)
     state
   end
 end

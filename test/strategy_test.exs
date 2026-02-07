@@ -53,7 +53,7 @@ defmodule Cluster.StrategyTest do
       assert_receive {:connect, :"foo@some.host"}
 
       assert_receive {:telemetry_event,
-                      {[:libcluster, :connect_node, :error], %{},
+                      {[:libcluster, :connect_node, :error], %{duration: _},
                        %{node: :"foo@some.host", topology: _, reason: :unreachable}, _}}
     end
 
@@ -71,7 +71,7 @@ defmodule Cluster.StrategyTest do
       assert_receive {:connect, :"foo@some.host"}
 
       assert_receive {:telemetry_event,
-                      {[:libcluster, :connect_node, :error], %{},
+                      {[:libcluster, :connect_node, :error], %{duration: _},
                        %{node: :"foo@some.host", topology: _, reason: :not_part_of_network}, _}}
     end
   end
@@ -123,8 +123,43 @@ defmodule Cluster.StrategyTest do
       assert_receive {:disconnect, :"foo@some.host"}
 
       assert_receive {:telemetry_event,
-                      {[:libcluster, :disconnect_node, :error], %{},
-                       %{node: :"foo@some.host", topology: _, reason: ":failed"}, _}}
+                      {[:libcluster, :disconnect_node, :error], %{duration: _},
+                       %{node: :"foo@some.host", topology: _, reason: :failed}, _}}
+    end
+  end
+
+  describe "poll_span/3" do
+    test "emits start and stop telemetry events" do
+      Telemetry.setup_telemetry([:libcluster, :poll, :start])
+      Telemetry.setup_telemetry([:libcluster, :poll, :stop])
+
+      result =
+        Strategy.poll_span(:test_topology, Cluster.Strategy.Epmd, fn ->
+          [:"node@10.0.0.1", :"node@10.0.0.2"]
+        end)
+
+      assert result == [:"node@10.0.0.1", :"node@10.0.0.2"]
+
+      assert_receive {:telemetry_event,
+                      {[:libcluster, :poll, :start], %{system_time: _},
+                       %{topology: :test_topology, strategy: Cluster.Strategy.Epmd}, _}}
+
+      assert_receive {:telemetry_event,
+                      {[:libcluster, :poll, :stop], %{duration: _},
+                       %{
+                         topology: :test_topology,
+                         strategy: Cluster.Strategy.Epmd,
+                         nodes_discovered: 2
+                       }, _}}
+    end
+
+    test "emits correct nodes_discovered count for empty list" do
+      Telemetry.setup_telemetry([:libcluster, :poll, :stop])
+
+      Strategy.poll_span(:test_topology, Cluster.Strategy.Epmd, fn -> [] end)
+
+      assert_receive {:telemetry_event,
+                      {[:libcluster, :poll, :stop], %{duration: _}, %{nodes_discovered: 0}, _}}
     end
   end
 end

@@ -1,6 +1,56 @@
 defmodule Cluster.Strategy do
   @moduledoc """
   This module defines the behaviour for implementing clustering strategies.
+
+  ## Telemetry
+
+  The following telemetry events are emitted by libcluster:
+
+  ### `[:libcluster, :connect_node, :ok]`
+
+  Emitted when a node is successfully connected.
+
+  * Measurements: `%{duration: integer}` (in native time units)
+  * Metadata: `%{node: atom, topology: atom}`
+
+  ### `[:libcluster, :connect_node, :error]`
+
+  Emitted when a node connection fails.
+
+  * Measurements: `%{duration: integer}` (in native time units)
+  * Metadata: `%{node: atom, topology: atom, reason: term}`
+
+  ### `[:libcluster, :disconnect_node, :ok]`
+
+  Emitted when a node is successfully disconnected.
+
+  * Measurements: `%{duration: integer}` (in native time units)
+  * Metadata: `%{node: atom, topology: atom}`
+
+  ### `[:libcluster, :disconnect_node, :error]`
+
+  Emitted when a node disconnection fails.
+
+  * Measurements: `%{duration: integer}` (in native time units)
+  * Metadata: `%{node: atom, topology: atom, reason: term}`
+
+  ### `[:libcluster, :poll, :start | :stop | :exception]`
+
+  Emitted around each strategy's poll cycle using `:telemetry.span/3`.
+
+  * Start measurements: `%{system_time: integer}`
+  * Stop measurements: `%{duration: integer}`
+  * Metadata: `%{topology: atom, strategy: module}`
+  * Stop metadata adds: `%{nodes_discovered: integer}`
+
+  ### `[:libcluster, :http_request, :start | :stop | :exception]`
+
+  Emitted around HTTP requests in Kubernetes and Rancher strategies.
+
+  * Start measurements: `%{system_time: integer}`
+  * Stop measurements: `%{duration: integer}`
+  * Metadata: `%{topology: atom, url: String.t()}`
+  * Stop metadata adds: `%{status: integer}`
   """
   defmacro __using__(_) do
     quote do
@@ -66,21 +116,21 @@ defmodule Cluster.Strategy do
           false ->
             :telemetry.execute(
               [:libcluster, :connect_node, :error],
-              %{},
+              %{duration: System.monotonic_time() - start},
               %{node: n, topology: topology, reason: :unreachable}
             )
 
-            Cluster.Logger.warn(topology, "unable to connect to #{inspect(n)}")
+            Cluster.Logger.warning(topology, "unable to connect to #{inspect(n)}")
             [{n, false} | acc]
 
           :ignored ->
             :telemetry.execute(
               [:libcluster, :connect_node, :error],
-              %{},
+              %{duration: System.monotonic_time() - start},
               %{node: n, topology: topology, reason: :not_part_of_network}
             )
 
-            Cluster.Logger.warn(
+            Cluster.Logger.warning(
               topology,
               "unable to connect to #{inspect(n)}: not part of network"
             )
@@ -136,11 +186,11 @@ defmodule Cluster.Strategy do
           false ->
             :telemetry.execute(
               [:libcluster, :disconnect_node, :error],
-              %{},
+              %{duration: System.monotonic_time() - start},
               %{node: n, topology: topology, reason: :already_disconnected}
             )
 
-            Cluster.Logger.warn(
+            Cluster.Logger.warning(
               topology,
               "disconnect from #{inspect(n)} failed because we're already disconnected"
             )
@@ -150,11 +200,11 @@ defmodule Cluster.Strategy do
           :ignored ->
             :telemetry.execute(
               [:libcluster, :disconnect_node, :error],
-              %{},
+              %{duration: System.monotonic_time() - start},
               %{node: n, topology: topology, reason: :not_part_of_network}
             )
 
-            Cluster.Logger.warn(
+            Cluster.Logger.warning(
               topology,
               "disconnect from #{inspect(n)} failed because it is not part of the network"
             )
@@ -164,11 +214,11 @@ defmodule Cluster.Strategy do
           reason ->
             :telemetry.execute(
               [:libcluster, :disconnect_node, :error],
-              %{},
-              %{node: n, topology: topology, reason: inspect(reason)}
+              %{duration: System.monotonic_time() - start},
+              %{node: n, topology: topology, reason: reason}
             )
 
-            Cluster.Logger.warn(
+            Cluster.Logger.warning(
               topology,
               "disconnect from #{inspect(n)} failed with: #{inspect(reason)}"
             )
@@ -183,17 +233,49 @@ defmodule Cluster.Strategy do
     end
   end
 
-  def intersection(_a, []), do: []
-  def intersection([], _b), do: []
+  @doc """
+  Wraps a strategy's poll cycle in a telemetry span.
 
-  def intersection(a, b) when is_list(a) and is_list(b) do
+  The given function should return a list of discovered nodes.
+  Returns the list of nodes.
+  """
+  def poll_span(topology, strategy, fun) do
+    :telemetry.span([:libcluster, :poll], %{topology: topology, strategy: strategy}, fn ->
+      result = fun.()
+      nodes_count = if is_list(result), do: length(result), else: 0
+      {result, %{topology: topology, strategy: strategy, nodes_discovered: nodes_count}}
+    end)
+  end
+
+  @doc false
+  def http_request(topology, method, request, http_options, options) do
+    {url, _headers} = request
+    metadata = %{topology: topology, url: List.to_string(url)}
+
+    :telemetry.span([:libcluster, :http_request], metadata, fn ->
+      result = :httpc.request(method, request, http_options, options)
+
+      status =
+        case result do
+          {:ok, {{_, code, _}, _, _}} -> code
+          _ -> 0
+        end
+
+      {result, Map.put(metadata, :status, status)}
+    end)
+  end
+
+  defp intersection(_a, []), do: []
+  defp intersection([], _b), do: []
+
+  defp intersection(a, b) when is_list(a) and is_list(b) do
     a |> MapSet.new() |> MapSet.intersection(MapSet.new(b))
   end
 
-  def difference(a, []), do: a
-  def difference([], _b), do: []
+  defp difference(a, []), do: a
+  defp difference([], _b), do: []
 
-  def difference(a, b) when is_list(a) and is_list(b) do
+  defp difference(a, b) when is_list(a) and is_list(b) do
     a |> MapSet.new() |> MapSet.difference(MapSet.new(b))
   end
 

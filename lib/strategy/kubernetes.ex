@@ -264,7 +264,11 @@ defmodule Cluster.Strategy.Kubernetes do
   end
 
   defp load(%State{topology: topology} = state) do
-    new_nodelist = MapSet.new(get_nodes(state))
+    new_nodelist =
+      topology
+      |> Cluster.Strategy.poll_span(__MODULE__, fn -> get_nodes(state) end)
+      |> MapSet.new()
+
     removed = MapSet.difference(state.meta, new_nodelist)
 
     new_nodelist =
@@ -407,7 +411,13 @@ defmodule Cluster.Strategy.Kubernetes do
         headers = [{~c"authorization", ~c"Bearer #{token}"}]
         http_options = [ssl: ssl_opts, timeout: 15000]
 
-        case :httpc.request(:get, {~c"https://#{master}/#{path}", headers}, http_options, []) do
+        case Cluster.Strategy.http_request(
+               topology,
+               :get,
+               {~c"https://#{master}/#{path}", headers},
+               http_options,
+               []
+             ) do
           {:ok, {{_version, 200, _status}, _headers, body}} ->
             parse_response(ip_lookup_mode, Jason.decode!(body))
             |> Enum.map(fn node_info ->
@@ -422,11 +432,11 @@ defmodule Cluster.Strategy.Kubernetes do
 
           {:ok, {{_version, 403, _status}, _headers, body}} ->
             %{"message" => msg} = Jason.decode!(body)
-            warn(topology, "cannot query kubernetes (unauthorized): #{msg}")
+            warning(topology, "cannot query kubernetes (unauthorized): #{msg}")
             []
 
           {:ok, {{_version, code, status}, _headers, body}} ->
-            warn(topology, "cannot query kubernetes (#{code} #{status}): #{inspect(body)}")
+            warning(topology, "cannot query kubernetes (#{code} #{status}): #{inspect(body)}")
             meta
 
           {:error, reason} ->
@@ -435,7 +445,7 @@ defmodule Cluster.Strategy.Kubernetes do
         end
 
       app_name == nil ->
-        warn(
+        warning(
           topology,
           "kubernetes strategy is selected, but :kubernetes_node_basename is not configured!"
         )
@@ -443,7 +453,7 @@ defmodule Cluster.Strategy.Kubernetes do
         []
 
       selector == nil ->
-        warn(
+        warning(
           topology,
           "kubernetes strategy is selected, but :kubernetes_selector is not configured!"
         )
@@ -451,7 +461,7 @@ defmodule Cluster.Strategy.Kubernetes do
         []
 
       :else ->
-        warn(topology, "kubernetes strategy is selected, but is not configured!")
+        warning(topology, "kubernetes strategy is selected, but is not configured!")
         []
     end
   end

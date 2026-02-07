@@ -8,7 +8,7 @@ defmodule Cluster.LoggerTest do
   alias Cluster.Logger
   Application.put_env(:libcluster, :debug, true)
 
-  for level <- [:debug, :info, :warn, :error] do
+  for level <- [:debug, :info, :warning, :error] do
     describe "#{level}/2" do
       test "logs correctly" do
         output =

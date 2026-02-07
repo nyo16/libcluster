@@ -129,12 +129,7 @@ defmodule Cluster.Strategy.Gossip do
     secret = Keyword.get(config, :secret, nil)
     state = %State{state | :meta => {multicast_addr, port, socket, secret}}
 
-    # TODO: Remove this version check when we deprecate OTP < 21 support
-    if :erlang.system_info(:otp_release) >= ~c"21" do
-      {:ok, state, {:continue, nil}}
-    else
-      {:ok, state, 0}
-    end
+    {:ok, state, {:continue, nil}}
   end
 
   defp reuse_port() do
@@ -165,14 +160,8 @@ defmodule Cluster.Strategy.Gossip do
   end
 
   # Send stuttered heartbeats
-  # TODO: Remove this version check when we deprecate OTP < 21 support
-  if :erlang.system_info(:otp_release) >= ~c"21" do
-    @impl true
-    def handle_continue(_, state), do: handle_info(:heartbeat, state)
-  else
-    @impl true
-    def handle_info(:timeout, state), do: handle_info(:heartbeat, state)
-  end
+  @impl true
+  def handle_continue(_, state), do: handle_info(:heartbeat, state)
 
   @impl true
   def handle_info(:heartbeat, %State{meta: {multicast_addr, port, socket, _}} = state) do
@@ -284,7 +273,7 @@ defmodule Cluster.Strategy.Gossip do
       {:ok, :crypto.crypto_one_time(:aes_256_cbc, key, iv, ciphertext, false)}
     catch
       :error, {tag, {file, line}, desc} ->
-        warn(state.topology, "decryption failed: #{inspect(tag)} (#{file}:#{line}): #{desc}")
+        warning(state.topology, "decryption failed: #{inspect(tag)} (#{file}:#{line}): #{desc}")
         :error
     end
   end
