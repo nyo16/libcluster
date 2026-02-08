@@ -1,10 +1,8 @@
 defmodule Cluster.Telemetry do
   @moduledoc false
 
-  use ExUnit.Case
-
   def setup_telemetry(event) do
-    telemetry_handle_id = "test-telemetry-handler-#{inspect(self())}"
+    telemetry_handle_id = "test-telemetry-handler-#{inspect(self())}-#{inspect(event)}"
 
     :ok =
       :telemetry.attach_many(
@@ -16,7 +14,7 @@ defmodule Cluster.Telemetry do
         nil
       )
 
-    :ok = on_exit(fn -> :telemetry.detach(telemetry_handle_id) end)
+    :ok = ExUnit.Callbacks.on_exit(fn -> :telemetry.detach(telemetry_handle_id) end)
   end
 
   defp send_to_pid(event, measurements, metadata, config) do

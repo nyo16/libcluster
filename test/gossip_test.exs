@@ -22,6 +22,7 @@ defmodule Cluster.Strategy.GossipTest do
               secret: "password"
             ],
             connect: {Cluster.Nodes, :connect, [self()]},
+            disconnect: {Cluster.Nodes, :disconnect, [self()]},
             list_nodes: {Cluster.Nodes, :list_nodes, [[]]}
           }
         ])

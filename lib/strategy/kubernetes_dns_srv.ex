@@ -177,7 +177,11 @@ defmodule Cluster.Strategy.Kubernetes.DNSSRV do
   end
 
   defp load(%State{topology: topology, meta: meta} = state) do
-    new_nodelist = MapSet.new(get_nodes(state))
+    new_nodelist =
+      topology
+      |> Cluster.Strategy.poll_span(__MODULE__, fn -> get_nodes(state) end)
+      |> MapSet.new()
+
     removed = MapSet.difference(meta, new_nodelist)
 
     new_nodelist =
@@ -252,7 +256,7 @@ defmodule Cluster.Strategy.Kubernetes.DNSSRV do
         end
 
       app_name == nil ->
-        warn(
+        warning(
           topology,
           "kubernetes.DNS strategy is selected, but :application_name is not configured!"
         )
@@ -260,11 +264,11 @@ defmodule Cluster.Strategy.Kubernetes.DNSSRV do
         []
 
       service == nil ->
-        warn(topology, "kubernetes strategy is selected, but :service is not configured!")
+        warning(topology, "kubernetes strategy is selected, but :service is not configured!")
         []
 
       :else ->
-        warn(topology, "kubernetes strategy is selected, but is not configured!")
+        warning(topology, "kubernetes strategy is selected, but is not configured!")
         []
     end
   end

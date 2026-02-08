@@ -23,6 +23,7 @@ defmodule Cluster.Strategy.DNSPoll do
   """
 
   use GenServer
+  use Cluster.Strategy
   import Cluster.Logger
 
   alias Cluster.Strategy.State
@@ -54,7 +55,11 @@ defmodule Cluster.Strategy.DNSPoll do
            list_nodes: list_nodes
          } = state
        ) do
-    new_nodelist = state |> get_nodes() |> MapSet.new()
+    new_nodelist =
+      topology
+      |> Cluster.Strategy.poll_span(__MODULE__, fn -> get_nodes(state) end)
+      |> MapSet.new()
+
     removed = MapSet.difference(state.meta, new_nodelist)
 
     new_nodelist =
@@ -131,7 +136,7 @@ defmodule Cluster.Strategy.DNSPoll do
   defp resolve({:ok, invalid_query}, {:ok, invalid_basename}, _resolver, %State{
          topology: topology
        }) do
-    warn(
+    warning(
       topology,
       "dns polling strategy is selected, but query or basename param is invalid: #{inspect(%{query: invalid_query, node_basename: invalid_basename})}"
     )
@@ -140,7 +145,7 @@ defmodule Cluster.Strategy.DNSPoll do
   end
 
   defp resolve(:error, :error, _resolver, %State{topology: topology}) do
-    warn(
+    warning(
       topology,
       "dns polling strategy is selected, but query and basename params missed"
     )

@@ -12,6 +12,7 @@ defmodule Cluster.Strategy.State do
           config: [{atom, term}]
         }
 
+  @enforce_keys [:topology, :connect, :disconnect, :list_nodes]
   defstruct topology: nil,
             connect: nil,
             disconnect: nil,

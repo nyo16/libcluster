@@ -45,7 +45,7 @@ defmodule Cluster.Strategy.ErlangHosts do
   def start_link([%State{topology: topology} = state]) do
     case :net_adm.host_file() do
       {:error, _} ->
-        Cluster.Logger.warn(topology, "couldn't find .hosts.erlang file - not joining cluster")
+        Cluster.Logger.warning(topology, "couldn't find .hosts.erlang file - not joining cluster")
         :ignore
 
       file ->
@@ -74,14 +74,16 @@ defmodule Cluster.Strategy.ErlangHosts do
     Keyword.get(config, :timeout, :infinity)
   end
 
-  defp connect_hosts(%State{meta: hosts_file} = state) do
+  defp connect_hosts(%State{topology: topology, meta: hosts_file} = state) do
     nodes =
-      hosts_file
-      |> Enum.map(&{:net_adm.names(&1), &1})
-      |> gather_node_names([])
-      |> List.delete(node())
+      Cluster.Strategy.poll_span(topology, __MODULE__, fn ->
+        hosts_file
+        |> Enum.map(&{:net_adm.names(&1), &1})
+        |> gather_node_names([])
+        |> List.delete(node())
+      end)
 
-    Cluster.Strategy.connect_nodes(state.topology, state.connect, state.list_nodes, nodes)
+    Cluster.Strategy.connect_nodes(topology, state.connect, state.list_nodes, nodes)
     state
   end
 

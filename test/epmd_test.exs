@@ -16,6 +16,7 @@ defmodule Cluster.Strategy.EpmdTest do
             topology: :name,
             config: [hosts: [:foo@bar]],
             connect: {Cluster.Nodes, :connect, [self()]},
+            disconnect: {Cluster.Nodes, :disconnect, [self()]},
             list_nodes: {Cluster.Nodes, :list_nodes, [[]]}
           }
         ])
@@ -36,6 +37,7 @@ defmodule Cluster.Strategy.EpmdTest do
             topology: :name,
             config: [hosts: [:foo@bar], timeout: timeout],
             connect: {Cluster.Nodes, :connect, [self()]},
+            disconnect: {Cluster.Nodes, :disconnect, [self()]},
             list_nodes: {Cluster.Nodes, :list_nodes, [[]]}
           }
         ])

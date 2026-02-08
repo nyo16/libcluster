@@ -151,6 +151,54 @@ but are known to exist.
 - [libcluster_consul](https://github.com/team-telnyx/libcluster_consul) - Consul clustering strategy
 - [libcluster_postgres](https://github.com/supabase/libcluster_postgres) - Postgres clustering strategy
 
+## Telemetry
+
+libcluster emits the following `:telemetry` events:
+
+| Event | Measurements | Metadata |
+|-------|-------------|----------|
+| `[:libcluster, :connect_node, :ok]` | `%{duration: native}` | `%{node: atom, topology: atom}` |
+| `[:libcluster, :connect_node, :error]` | `%{duration: native}` | `%{node: atom, topology: atom, reason: term}` |
+| `[:libcluster, :disconnect_node, :ok]` | `%{duration: native}` | `%{node: atom, topology: atom}` |
+| `[:libcluster, :disconnect_node, :error]` | `%{duration: native}` | `%{node: atom, topology: atom, reason: term}` |
+| `[:libcluster, :poll, :start]` | `%{system_time: integer}` | `%{topology: atom, strategy: module}` |
+| `[:libcluster, :poll, :stop]` | `%{duration: native}` | `%{topology: atom, strategy: module, nodes_discovered: integer}` |
+| `[:libcluster, :poll, :exception]` | `%{duration: native}` | `%{topology: atom, strategy: module, kind: term, reason: term, stacktrace: list}` |
+| `[:libcluster, :http_request, :start]` | `%{system_time: integer}` | `%{topology: atom, url: string}` |
+| `[:libcluster, :http_request, :stop]` | `%{duration: native}` | `%{topology: atom, url: string, status: integer}` |
+| `[:libcluster, :http_request, :exception]` | `%{duration: native}` | `%{topology: atom, url: string, kind: term, reason: term, stacktrace: list}` |
+
+### PromEx Integration
+
+libcluster ships with an optional `Cluster.PromExPlugin` module that exposes all telemetry events as Prometheus metrics. The module only compiles when `prom_ex` is available as a dependency — no changes are needed if you don't use PromEx.
+
+To use it, add `prom_ex` to your own project's dependencies:
+
+```elixir
+defp deps do
+  [
+    {:libcluster, "~> MAJ.MIN"},
+    {:prom_ex, "~> 1.9"}
+  ]
+end
+```
+
+Then add the plugin to your PromEx module:
+
+```elixir
+defmodule MyApp.PromEx do
+  use PromEx, otp_app: :my_app
+
+  @impl true
+  def plugins do
+    [
+      # ... other plugins ...
+      Cluster.PromExPlugin
+    ]
+  end
+end
+```
+
 ## Copyright and License
 
 Copyright (c) 2016 Paul Schoenfelder
